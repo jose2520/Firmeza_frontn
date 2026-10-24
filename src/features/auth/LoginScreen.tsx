@@ -29,7 +29,7 @@ export function LoginScreen() {
   const [searchParams] = useSearchParams();
   const bypassRedirect = searchParams.get('bypassRedirect');
 
-  const { user, isAuthenticated, isLoading, error, login, logout, clearError } = useAuth();
+  const { user, isAuthenticated, isLoading, error, login, register, logout, clearError } = useAuth();
 
   useEffect(() => {
     if (isAuthenticated && user && (user as any).role === 'Admin' && bypassRedirect !== 'true') {
@@ -37,7 +37,10 @@ export function LoginScreen() {
     }
   }, [isAuthenticated, user, navigate, bypassRedirect]);
 
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [role, setRole] = useState<'empresa' | 'conductor'>('empresa');
+  const [nombre, setNombre] = useState('');
+  const [telefono, setTelefono] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -49,20 +52,37 @@ export function LoginScreen() {
     setValidationError(null);
     clearError();
 
+    if (authMode === 'register' && !nombre.trim()) {
+      setValidationError('Por favor ingresa tu nombre completo o razón social.');
+      return;
+    }
+
     if (!email.trim()) {
       setValidationError('Por favor ingresa tu correo electrónico corporativo.');
       return;
     }
 
-    if (!password.trim()) {
-      setValidationError('Por favor ingresa tu contraseña de acceso.');
+    if (!password.trim() || password.length < 6) {
+      setValidationError('Por favor ingresa tu contraseña de acceso (mínimo 6 caracteres).');
       return;
     }
 
     try {
-      const response = await login({ email: email.trim(), password });
-      if (response.usuario.role === 'Admin') {
-        navigate('/admin', { replace: true });
+      if (authMode === 'register') {
+        const response = await register({
+          nombre: nombre.trim(),
+          email: email.trim(),
+          password,
+          telefono: telefono.trim(),
+        });
+        if (response.usuario.role === 'Admin') {
+          navigate('/admin', { replace: true });
+        }
+      } else {
+        const response = await login({ email: email.trim(), password });
+        if (response.usuario.role === 'Admin') {
+          navigate('/admin', { replace: true });
+        }
       }
     } catch {
       // Error manejado en useAuth
@@ -189,6 +209,38 @@ export function LoginScreen() {
                   </p>
                 </div>
 
+                {/* Selector de Modo: Iniciar Sesión / Registrarse */}
+                <div className="flex items-center justify-center p-1 rounded-2xl bg-slate-100 dark:bg-[#0B111E] border border-slate-200 dark:border-slate-800 mb-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthMode('login');
+                      clearError();
+                      setValidationError(null);
+                    }}
+                    className={`flex-1 py-1.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      authMode === 'login'
+                        ? 'bg-amber-500 text-slate-950 shadow-sm'
+                        : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                    }`}>
+                    Iniciar Sesión
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthMode('register');
+                      clearError();
+                      setValidationError(null);
+                    }}
+                    className={`flex-1 py-1.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      authMode === 'register'
+                        ? 'bg-amber-500 text-slate-950 shadow-sm'
+                        : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                    }`}>
+                    Registrar Cuenta
+                  </button>
+                </div>
+
                 {/* Selector de Rol interactivo */}
                 <div
                   className={`role-tabs-container grid grid-cols-2 p-1 rounded-xl mb-4 border ${
@@ -246,8 +298,59 @@ export function LoginScreen() {
                   </div>
                 )}
 
-                {/* Formulario de Login */}
+                {/* Formulario de Login / Registro */}
                 <form onSubmit={handleSubmit} className="space-y-3.5 text-left">
+                  {authMode === 'register' && (
+                    <>
+                      {/* Nombre Completo / Empresa */}
+                      <div className="space-y-1">
+                        <label
+                          className={`label-login block text-[11px] font-bold uppercase tracking-wider ${
+                            isDark ? 'text-slate-200' : 'text-slate-700'
+                          }`}>
+                          Nombre Completo o Empresa
+                        </label>
+                        <div className="relative rounded-xl shadow-sm">
+                          <input
+                            type="text"
+                            required
+                            placeholder="Ej. Constructora Bolívar S.A.S."
+                            value={nombre}
+                            onChange={(e) => setNombre(e.target.value)}
+                            className={`input-login-field block w-full px-4 py-2.5 rounded-xl text-xs sm:text-sm placeholder-slate-400 transition-all font-medium border focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 ${
+                              isDark
+                                ? 'bg-[#0B111E] border-slate-700 text-white placeholder-slate-500 focus:bg-[#0B111E]'
+                                : 'bg-slate-50 border-slate-300 text-slate-900 focus:bg-white'
+                            }`}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Teléfono */}
+                      <div className="space-y-1">
+                        <label
+                          className={`label-login block text-[11px] font-bold uppercase tracking-wider ${
+                            isDark ? 'text-slate-200' : 'text-slate-700'
+                          }`}>
+                          Teléfono de Contacto
+                        </label>
+                        <div className="relative rounded-xl shadow-sm">
+                          <input
+                            type="tel"
+                            placeholder="Ej. 310 123 4567"
+                            value={telefono}
+                            onChange={(e) => setTelefono(e.target.value)}
+                            className={`input-login-field block w-full px-4 py-2.5 rounded-xl text-xs sm:text-sm placeholder-slate-400 transition-all font-medium border focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 ${
+                              isDark
+                                ? 'bg-[#0B111E] border-slate-700 text-white placeholder-slate-500 focus:bg-[#0B111E]'
+                                : 'bg-slate-50 border-slate-300 text-slate-900 focus:bg-white'
+                            }`}
+                          />
+                        </div>
+                      </div>
+                    </>
+                  )}
+
                   {/* Correo Electrónico */}
                   <div className="space-y-1">
                     <label
@@ -348,7 +451,12 @@ export function LoginScreen() {
                       disabled={isLoading}
                       className="btn-login-cta w-full inline-flex items-center justify-center gap-2.5 px-6 py-3 rounded-full font-black text-xs sm:text-sm tracking-wider uppercase cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed">
                       {isLoading ? (
-                        <span>Ingresando al Portal...</span>
+                        <span>Procesando solicitud...</span>
+                      ) : authMode === 'register' ? (
+                        <>
+                          <span>Crear Cuenta Corporativa</span>
+                          <ArrowRight className="w-4 h-4" />
+                        </>
                       ) : (
                         <>
                           <span>Ingresar al Portal</span>

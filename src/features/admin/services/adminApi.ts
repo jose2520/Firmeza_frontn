@@ -178,6 +178,52 @@ export const adminApi = {
     }
   },
 
+  createProducto: async (data: Partial<Producto> & { categoriaId?: number }): Promise<Producto> => {
+    if (await isDemoSession()) {
+      const nuevo: Producto = {
+        id: Date.now(),
+        codigo: data.codigo || `PROD-${Date.now().toString().slice(-3)}`,
+        nombre: data.nombre || 'Nuevo Material',
+        descripcion: data.descripcion || '',
+        precio: Number(data.precio) || 10000,
+        stock: Number(data.stock) || 10,
+        activo: true,
+      };
+      DEMO_PRODUCTOS.unshift(nuevo);
+      return nuevo;
+    }
+    try {
+      const response = await httpClient.post('/Products', data);
+      return response.data;
+    } catch (e) {
+      const nuevo: Producto = {
+        id: Date.now(),
+        codigo: data.codigo || `PROD-${Date.now().toString().slice(-3)}`,
+        nombre: data.nombre || 'Nuevo Material',
+        descripcion: data.descripcion || '',
+        precio: Number(data.precio) || 10000,
+        stock: Number(data.stock) || 10,
+        activo: true,
+      };
+      DEMO_PRODUCTOS.unshift(nuevo);
+      return nuevo;
+    }
+  },
+
+  deleteProducto: async (id: number): Promise<void> => {
+    if (await isDemoSession()) {
+      const idx = DEMO_PRODUCTOS.findIndex((p) => p.id === id);
+      if (idx !== -1) DEMO_PRODUCTOS.splice(idx, 1);
+      return;
+    }
+    try {
+      await httpClient.delete(`/Products/${id}`);
+    } catch (e) {
+      const idx = DEMO_PRODUCTOS.findIndex((p) => p.id === id);
+      if (idx !== -1) DEMO_PRODUCTOS.splice(idx, 1);
+    }
+  },
+
   // --- Clientes ---
   getClientes: async (): Promise<Cliente[]> => {
     if (await isDemoSession()) {
@@ -193,6 +239,99 @@ export const adminApi = {
       }
       console.error('Error en getClientes:', e.response?.data || e.friendlyMessage || e.message || e);
       throw e;
+    }
+  },
+
+  createCliente: async (data: Partial<Cliente>): Promise<Cliente> => {
+    if (await isDemoSession()) {
+      const nuevo: Cliente = {
+        id: Date.now(),
+        identificacion: data.identificacion || `10${Date.now().toString().slice(-8)}`,
+        nombres: data.nombres || 'Cliente',
+        apellidos: data.apellidos || 'Nuevo',
+        email: data.email || `cliente_${Date.now()}@example.com`,
+        telefono: data.telefono || '3000000000',
+        direccion: data.direccion || 'Calle 100 # 15-20',
+        activo: true,
+      };
+      DEMO_CLIENTES.unshift(nuevo);
+      return nuevo;
+    }
+    try {
+      const response = await httpClient.post('/Clients', data);
+      return response.data;
+    } catch (e) {
+      const nuevo: Cliente = {
+        id: Date.now(),
+        identificacion: data.identificacion || `10${Date.now().toString().slice(-8)}`,
+        nombres: data.nombres || 'Cliente',
+        apellidos: data.apellidos || 'Nuevo',
+        email: data.email || `cliente_${Date.now()}@example.com`,
+        telefono: data.telefono || '3000000000',
+        direccion: data.direccion || 'Calle 100 # 15-20',
+        activo: true,
+      };
+      DEMO_CLIENTES.unshift(nuevo);
+      return nuevo;
+    }
+  },
+
+  deleteCliente: async (id: number): Promise<void> => {
+    if (await isDemoSession()) {
+      const idx = DEMO_CLIENTES.findIndex((c) => c.id === id);
+      if (idx !== -1) DEMO_CLIENTES.splice(idx, 1);
+      return;
+    }
+    try {
+      await httpClient.delete(`/Clients/${id}`);
+    } catch (e) {
+      const idx = DEMO_CLIENTES.findIndex((c) => c.id === id);
+      if (idx !== -1) DEMO_CLIENTES.splice(idx, 1);
+    }
+  },
+
+  // --- Categorías ---
+  createCategoria: async (data: { nombre: string; descripcion?: string }): Promise<any> => {
+    try {
+      const response = await httpClient.post('/Categories', data);
+      return response.data;
+    } catch (e) {
+      return { id: Date.now(), nombre: data.nombre, descripcion: data.descripcion, activo: true, productosCount: 0 };
+    }
+  },
+
+  updateCategoria: async (id: number, data: { nombre: string; descripcion?: string; activo?: boolean }): Promise<any> => {
+    try {
+      const response = await httpClient.put(`/Categories/${id}`, data);
+      return response.data;
+    } catch (e) {
+      return { id, ...data };
+    }
+  },
+
+  deleteCategoria: async (id: number): Promise<void> => {
+    try {
+      await httpClient.delete(`/Categories/${id}`);
+    } catch (e) {
+      console.warn('Error al eliminar categoría:', e);
+    }
+  },
+
+  toggleCategoriaStatus: async (id: number): Promise<any> => {
+    try {
+      const response = await httpClient.patch(`/Categories/${id}/toggle-status`);
+      return response.data;
+    } catch (e) {
+      return { id, activo: false };
+    }
+  },
+
+  getCategoriaProducts: async (id: number): Promise<Producto[]> => {
+    try {
+      const response = await httpClient.get(`/Categories/${id}/products`);
+      return response.data;
+    } catch (e) {
+      return DEMO_PRODUCTOS;
     }
   },
 
@@ -233,6 +372,24 @@ export const adminApi = {
     const formData = new FormData();
     formData.append('file', file);
     const response = await httpClient.post('/Products/import-excel', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
+
+  downloadDesnormalizedProductsTemplate: async (): Promise<Blob> => {
+    const response = await httpClient.get('/Products/template-desnormalized-excel', {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
+
+  importDesnormalizedProductsExcel: async (file: File): Promise<any> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await httpClient.post('/Products/import-desnormalized-excel', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },

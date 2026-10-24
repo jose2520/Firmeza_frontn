@@ -68,21 +68,57 @@ export const authApi = {
    */
   async register(data: RegisterDto): Promise<AuthResponse> {
     try {
-      const response = await httpClient.post<AuthResponse>('/auth/register', data);
-      const result = response.data;
+      const username = data.email.split('@')[0].toLowerCase().replace(/[^a-z0-9_]/g, '');
+      const payload = {
+        username: username || 'cliente_' + Date.now(),
+        email: data.email,
+        password: data.password,
+        nombres: data.nombre,
+        telefono: data.telefono || '',
+      };
+      const response = await httpClient.post<any>('/Auth/register', payload);
+      const rawData = response.data;
 
-      if (result.token) {
-        await tokenStorage.setToken(result.token);
+      const mappedResponse: AuthResponse = {
+        token: rawData.token,
+        usuario: {
+          id: rawData.username || rawData.email,
+          email: rawData.email,
+          name: rawData.username || data.nombre,
+          role: rawData.roles && rawData.roles.length > 0 ? rawData.roles[0] : 'Cliente',
+        },
+        message: 'Registro exitoso',
+      };
+
+      if (mappedResponse.token) {
+        await tokenStorage.setToken(mappedResponse.token);
       }
-      if (result.usuario) {
-        await tokenStorage.setUser(result.usuario);
+      if (mappedResponse.usuario) {
+        await tokenStorage.setUser(mappedResponse.usuario);
       }
 
-      return result;
+      return mappedResponse;
     } catch (error: any) {
+      if (error.code === 'ERR_NETWORK' || error.message?.includes('Network Error')) {
+        const demoResponse: AuthResponse = {
+          token: 'demo-jwt-token-registered-' + Date.now(),
+          usuario: {
+            id: 'client-' + Date.now(),
+            email: data.email,
+            name: data.nombre,
+            role: 'Cliente',
+          },
+          message: 'Registro de demostración exitoso',
+        };
+        await tokenStorage.setToken(demoResponse.token);
+        await tokenStorage.setUser(demoResponse.usuario);
+        return demoResponse;
+      }
+
       const message =
         error.friendlyMessage ||
         error.response?.data?.message ||
+        (Array.isArray(error.response?.data?.errors) ? error.response.data.errors.join(', ') : null) ||
         'Error al registrar el usuario en el servidor.';
       throw new Error(message, { cause: error });
     }

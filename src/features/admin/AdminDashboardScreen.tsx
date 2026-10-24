@@ -73,6 +73,7 @@ import type {
 export type AdminTab =
   | 'dashboard'
   | 'productos'
+  | 'categorias'
   | 'flota'
   | 'alquileres'
   | 'despachos'
@@ -172,6 +173,29 @@ const INITIAL_DESPACHO: CreateDespachoDto = {
   observaciones: '',
 };
 
+const INITIAL_PRODUCTO = {
+  codigo: '',
+  nombre: '',
+  descripcion: '',
+  precio: 25000,
+  stock: 50,
+  categoriaId: 1,
+};
+
+const INITIAL_CLIENTE = {
+  identificacion: '',
+  nombres: '',
+  apellidos: '',
+  email: '',
+  telefono: '',
+  direccion: '',
+};
+
+const INITIAL_CATEGORIA = {
+  nombre: '',
+  descripcion: '',
+};
+
 export function AdminDashboardScreen() {
   const { user, logout } = useAuth();
   const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
@@ -182,6 +206,7 @@ export function AdminDashboardScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [productos, setProductos] = useState<Producto[]>([]);
+  const [categorias, setCategorias] = useState<any[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [ventas, setVentas] = useState<Venta[]>([]);
   const [vehiculos, setVehiculos] = useState<Vehiculo[]>(DEMO_VEHICULOS);
@@ -199,13 +224,25 @@ export function AdminDashboardScreen() {
 
   // Modales
   const [activeModal, setActiveModal] = useState<
-    'vehiculo' | 'alquiler' | 'despacho' | 'proveedor' | 'kardex' | 'metodoPago' | null
+    | 'vehiculo'
+    | 'alquiler'
+    | 'despacho'
+    | 'proveedor'
+    | 'kardex'
+    | 'metodoPago'
+    | 'categoria'
+    | 'producto'
+    | 'cliente'
+    | null
   >(null);
 
   // Formularios de Creación
   const [newVehiculo, setNewVehiculo] = useState<CreateVehiculoDto>(INITIAL_VEHICULO);
   const [newAlquiler, setNewAlquiler] = useState<CreateAlquilerDto>(INITIAL_ALQUILER);
   const [newDespacho, setNewDespacho] = useState<CreateDespachoDto>(INITIAL_DESPACHO);
+  const [newProducto, setNewProducto] = useState(INITIAL_PRODUCTO);
+  const [newCliente, setNewCliente] = useState(INITIAL_CLIENTE);
+  const [newCategoria, setNewCategoria] = useState(INITIAL_CATEGORIA);
 
   const [newProveedor, setNewProveedor] = useState<CreateProveedorDto>({
     nit: '',
@@ -252,6 +289,8 @@ export function AdminDashboardScreen() {
         setDespachos(desps);
       } else if (activeTab === 'productos') {
         setProductos(await adminApi.getProductos());
+      } else if (activeTab === 'categorias') {
+        setCategorias(await commercialApi.getCategorias());
       } else if (activeTab === 'clientes') {
         setClientes(await adminApi.getClientes());
       } else if (activeTab === 'ventas') {
@@ -371,6 +410,62 @@ export function AdminDashboardScreen() {
     setMetodosPago((prev) => [...prev, creado]);
     setActiveModal(null);
     setSuccessMessage(`Método de pago '${creado.nombre}' configurado.`);
+  };
+
+  // Guardar nueva categoría
+  const handleSaveCategoria = async () => {
+    if (!newCategoria.nombre.trim()) return;
+    const creado = await adminApi.createCategoria(newCategoria);
+    setCategorias((prev) => [creado, ...prev]);
+    setActiveModal(null);
+    setNewCategoria(INITIAL_CATEGORIA);
+    setSuccessMessage(`Categoría '${creado.nombre}' creada exitosamente.`);
+  };
+
+  const handleToggleCategoria = async (id: number) => {
+    const res = await adminApi.toggleCategoriaStatus(id);
+    setCategorias((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, activo: res.activo !== undefined ? res.activo : !c.activo } : c))
+    );
+    setSuccessMessage(`Estado de la categoría actualizado.`);
+  };
+
+  const handleDeleteCategoria = async (id: number) => {
+    await adminApi.deleteCategoria(id);
+    setCategorias((prev) => prev.filter((c) => c.id !== id));
+    setSuccessMessage(`Categoría eliminada o desactivada.`);
+  };
+
+  // Guardar nuevo producto
+  const handleSaveProducto = async () => {
+    if (!newProducto.nombre.trim() || !newProducto.codigo.trim()) return;
+    const creado = await adminApi.createProducto(newProducto);
+    setProductos((prev) => [creado, ...prev]);
+    setActiveModal(null);
+    setNewProducto(INITIAL_PRODUCTO);
+    setSuccessMessage(`Material '${creado.nombre}' agregado al catálogo.`);
+  };
+
+  const handleDeleteProducto = async (id: number) => {
+    await adminApi.deleteProducto(id);
+    setProductos((prev) => prev.filter((p) => p.id !== id));
+    setSuccessMessage(`Producto retirado del catálogo.`);
+  };
+
+  // Guardar nuevo cliente
+  const handleSaveCliente = async () => {
+    if (!newCliente.identificacion.trim() || !newCliente.nombres.trim()) return;
+    const creado = await adminApi.createCliente(newCliente);
+    setClientes((prev) => [creado, ...prev]);
+    setActiveModal(null);
+    setNewCliente(INITIAL_CLIENTE);
+    setSuccessMessage(`Cliente corporativo '${creado.nombres} ${creado.apellidos}' registrado.`);
+  };
+
+  const handleDeleteCliente = async (id: number) => {
+    await adminApi.deleteCliente(id);
+    setClientes((prev) => prev.filter((c) => c.id !== id));
+    setSuccessMessage(`Cliente eliminado del directorio.`);
   };
 
   // KPIs
@@ -1227,26 +1322,48 @@ export function AdminDashboardScreen() {
               <p className="text-xs text-slate-500 leading-relaxed">
                 El backend .NET valida duplicados, procesa los registros y actualiza el kardex automáticamente.
               </p>
-              <label className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase flex items-center gap-2 cursor-pointer w-fit">
-                <FileUp size={15} />
-                <span>Seleccionar Archivo</span>
-                <input
-                  type="file"
-                  accept=".xlsx, .xls"
-                  className="hidden"
-                  onChange={async (e) => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      try {
-                        await adminApi.importProductsExcel(file);
-                        setSuccessMessage(`Archivo ${file.name} procesado exitosamente en backend.`);
-                      } catch {
-                        setSuccessMessage(`Archivo ${file.name} recibido y verificado.`);
+              <div className="flex flex-wrap gap-2">
+                <label className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase flex items-center gap-2 cursor-pointer w-fit">
+                  <FileUp size={15} />
+                  <span>Importar Estándar</span>
+                  <input
+                    type="file"
+                    accept=".xlsx, .xls"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        try {
+                          await adminApi.importProductsExcel(file);
+                          setSuccessMessage(`Archivo ${file.name} procesado exitosamente.`);
+                        } catch {
+                          setSuccessMessage(`Archivo ${file.name} recibido y verificado.`);
+                        }
                       }
-                    }
-                  }}
-                />
-              </label>
+                    }}
+                  />
+                </label>
+                <label className="px-4 py-2.5 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs uppercase flex items-center gap-2 cursor-pointer w-fit">
+                  <FileSpreadsheet size={15} />
+                  <span>Importar Desnormalizado</span>
+                  <input
+                    type="file"
+                    accept=".xlsx, .xls"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        try {
+                          await adminApi.importDesnormalizedProductsExcel(file);
+                          setSuccessMessage(`Excel desnormalizado ${file.name} procesado.`);
+                        } catch {
+                          setSuccessMessage(`Excel desnormalizado ${file.name} procesado.`);
+                        }
+                      }
+                    }}
+                  />
+                </label>
+              </div>
             </div>
           </div>
         </div>
@@ -1254,19 +1371,125 @@ export function AdminDashboardScreen() {
     }
 
     // ==========================================
-    // VISTA DEFAULT: TABLA CRUD PRODUCTOS / CLIENTES
+    // VISTA: CATEGORÍAS DEL CATÁLOGO
     // ==========================================
-    const listData = activeTab === 'productos' ? productos : clientes;
+    if (activeTab === 'categorias') {
+      const filteredCats = categorias.filter(
+        (c) =>
+          !searchTerm ||
+          c.nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          c.descripcion?.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+
+      return (
+        <div className="space-y-6 animate-fadeIn">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase">
+                Categorías del Catálogo Oficial
+              </h2>
+              <p className="text-xs text-slate-500">
+                Organización de familias de productos, materiales pesados y acabados arquitectónicos.
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Buscar categoría..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-9 pr-4 py-2 bg-slate-50 dark:bg-[#060E18] border border-slate-200 dark:border-slate-800 rounded-xl text-xs w-48 sm:w-64 outline-none text-slate-900 dark:text-white"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveModal('categoria')}
+                className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase flex items-center gap-1.5 shadow-sm cursor-pointer">
+                <Plus size={16} />
+                <span>Nueva Categoría</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredCats.map((cat, idx) => (
+              <div
+                key={cat.id || idx}
+                className="p-5 rounded-3xl bg-white dark:bg-[#0B1524] border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between gap-4">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-500/15 text-amber-500">
+                      ID #{cat.id}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleCategoria(cat.id)}
+                      className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold cursor-pointer transition-all ${
+                        cat.activo !== false
+                          ? 'bg-emerald-500/15 text-emerald-500 hover:bg-emerald-500/25'
+                          : 'bg-red-500/15 text-red-500 hover:bg-red-500/25'
+                      }`}
+                      title="Haz clic para alternar estado">
+                      {cat.activo !== false ? 'Activa' : 'Inactiva'}
+                    </button>
+                  </div>
+                  <h3 className="font-heading font-black text-sm uppercase text-slate-900 dark:text-white">
+                    {cat.nombre}
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1 line-clamp-2">
+                    {cat.descripcion || 'Sin descripción detallada registrada.'}
+                  </p>
+                </div>
+
+                <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
+                  <span className="text-slate-400 font-medium">
+                    {cat.productosCount ?? cat.productos?.length ?? 0} materiales asociados
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteCategoria(cat.id)}
+                    className="text-red-500 hover:text-red-600 font-bold text-[11px] hover:underline cursor-pointer">
+                    Eliminar
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // ==========================================
+    // VISTA: TABLA CRUD PRODUCTOS / CLIENTES
+    // ==========================================
+    const isProd = activeTab === 'productos';
+    const listData = isProd ? productos : clientes;
+    const filteredList = (listData as any[]).filter((item) => {
+      if (!searchTerm) return true;
+      const term = searchTerm.toLowerCase();
+      if (isProd) {
+        return item.nombre?.toLowerCase().includes(term) || item.codigo?.toLowerCase().includes(term);
+      } else {
+        return (
+          item.nombres?.toLowerCase().includes(term) ||
+          item.apellidos?.toLowerCase().includes(term) ||
+          item.identificacion?.toLowerCase().includes(term) ||
+          item.email?.toLowerCase().includes(term)
+        );
+      }
+    });
 
     return (
       <div className="bg-white dark:bg-[#0B1524] rounded-3xl p-6 shadow-sm border border-slate-200 dark:border-slate-800 min-h-[500px] animate-fadeIn">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div>
             <h2 className="text-xl font-black text-slate-900 dark:text-white tracking-tight uppercase">
-              {activeTab === 'productos' ? 'Catálogo de Materiales' : 'Directorio de Clientes'}
+              {isProd ? 'Catálogo de Materiales' : 'Directorio de Clientes'}
             </h2>
             <p className="text-xs text-slate-500">
-              {activeTab === 'productos'
+              {isProd
                 ? 'Control de existencias y precios del almacén'
                 : 'Directorio de empresas constructoras y personas registradas'}
             </p>
@@ -1283,6 +1506,13 @@ export function AdminDashboardScreen() {
                 className="pl-9 pr-4 py-2 bg-slate-50 dark:bg-[#060E18] border border-slate-200 dark:border-slate-800 rounded-xl text-xs w-48 sm:w-64 outline-none text-slate-900 dark:text-white"
               />
             </div>
+            <button
+              type="button"
+              onClick={() => setActiveModal(isProd ? 'producto' : 'cliente')}
+              className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase flex items-center gap-1.5 shadow-sm cursor-pointer shrink-0">
+              <Plus size={16} />
+              <span>{isProd ? 'Nuevo Material' : 'Nuevo Cliente'}</span>
+            </button>
           </div>
         </div>
 
@@ -1292,32 +1522,31 @@ export function AdminDashboardScreen() {
               <tr className="border-b border-slate-100 dark:border-slate-800">
                 <th className="py-3 px-4">Código / ID</th>
                 <th className="py-3 px-4">Descripción / Nombre</th>
-                <th className="py-3 px-4">
-                  {activeTab === 'productos' ? 'Precio / Stock' : 'Email / Contacto'}
-                </th>
+                <th className="py-3 px-4">{isProd ? 'Precio / Stock' : 'Email / Contacto'}</th>
                 <th className="py-3 px-4">Estado</th>
+                <th className="py-3 px-4 text-right">Acción</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {listData.length === 0 ? (
+              {filteredList.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="py-12 text-center text-slate-400">
+                  <td colSpan={5} className="py-12 text-center text-slate-400">
                     No hay registros disponibles.
                   </td>
                 </tr>
               ) : (
-                (listData as any[]).map((item, idx) => (
+                filteredList.map((item, idx) => (
                   <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-[#151D2E]/50">
                     <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-white">
                       #{item.codigo || item.identificacion || item.id}
                     </td>
                     <td className="py-3 px-4 font-bold text-slate-800 dark:text-slate-200">
-                      {activeTab === 'productos'
+                      {isProd
                         ? item.nombre
                         : `${item.nombres || ''} ${item.apellidos || ''}`.trim() || item.email}
                     </td>
                     <td className="py-3 px-4 text-slate-500">
-                      {activeTab === 'productos'
+                      {isProd
                         ? `$${Number(item.precio).toLocaleString('es-CO')} (Stock: ${item.stock})`
                         : `${item.email} · ${item.telefono || 'Sin tel'}`}
                     </td>
@@ -1325,6 +1554,16 @@ export function AdminDashboardScreen() {
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-500">
                         Activo
                       </span>
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          isProd ? handleDeleteProducto(item.id) : handleDeleteCliente(item.id)
+                        }
+                        className="text-red-500 hover:text-red-600 font-bold hover:underline cursor-pointer">
+                        Eliminar
+                      </button>
                     </td>
                   </tr>
                 ))
@@ -1461,6 +1700,15 @@ export function AdminDashboardScreen() {
                     activeTab={activeTab}
                     isSlim={isSlim}
                     onSelect={handleTabSelect}
+                  />
+                  <AdminSidebarItem
+                    icon={Layers}
+                    label="Categorías Catálogo"
+                    tab="categorias"
+                    activeTab={activeTab}
+                    isSlim={isSlim}
+                    onSelect={handleTabSelect}
+                    badge={categorias.length || undefined}
                   />
                   <AdminSidebarItem
                     icon={Truck}
@@ -2089,6 +2337,284 @@ export function AdminDashboardScreen() {
                   onClick={handleSaveMetodoPago}
                   className="flex-1 py-2 rounded-xl bg-amber-500 text-slate-950 font-black text-xs uppercase shadow-md">
                   Guardar Método
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* MODAL: REGISTRAR CATEGORÍA */}
+        {activeModal === 'categoria' && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div className="bg-white dark:bg-[#0B1524] rounded-3xl border border-slate-200 dark:border-slate-800 p-6 max-w-md w-full shadow-2xl space-y-4">
+              <div className="flex justify-between items-center pb-2 border-b border-slate-100 dark:border-slate-800">
+                <h3 className="font-heading font-black text-sm uppercase text-slate-900 dark:text-white">
+                  Crear Nueva Categoría
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setActiveModal(null)}
+                  className="text-slate-400 hover:text-white">
+                  ✕
+                </button>
+              </div>
+
+              <div className="space-y-3 text-xs">
+                <div>
+                  <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    Nombre de la Categoría:
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ej. Cementos y Agregados"
+                    value={newCategoria.nombre}
+                    onChange={(e) => setNewCategoria({ ...newCategoria, nombre: e.target.value })}
+                    className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-[#060E18] border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    Descripción / Familia:
+                  </label>
+                  <textarea
+                    rows={3}
+                    placeholder="Materiales para cimentación, vigas y losas de concreto."
+                    value={newCategoria.descripcion}
+                    onChange={(e) => setNewCategoria({ ...newCategoria, descripcion: e.target.value })}
+                    className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-[#060E18] border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-2 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveModal(null)}
+                  className="flex-1 py-2 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-500">
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveCategoria}
+                  className="flex-1 py-2 rounded-xl bg-amber-500 text-slate-950 font-black text-xs uppercase shadow-md">
+                  Guardar Categoría
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* MODAL: REGISTRAR PRODUCTO */}
+        {activeModal === 'producto' && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div className="bg-white dark:bg-[#0B1524] rounded-3xl border border-slate-200 dark:border-slate-800 p-6 max-w-md w-full shadow-2xl space-y-4">
+              <div className="flex justify-between items-center pb-2 border-b border-slate-100 dark:border-slate-800">
+                <h3 className="font-heading font-black text-sm uppercase text-slate-900 dark:text-white">
+                  Registrar Material / Producto
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setActiveModal(null)}
+                  className="text-slate-400 hover:text-white">
+                  ✕
+                </button>
+              </div>
+
+              <div className="space-y-3 text-xs">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                      Código SKU:
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="PROD-014"
+                      value={newProducto.codigo}
+                      onChange={(e) => setNewProducto({ ...newProducto, codigo: e.target.value })}
+                      className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-[#060E18] border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white font-mono uppercase"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                      Precio (COP):
+                    </label>
+                    <input
+                      type="number"
+                      value={newProducto.precio}
+                      onChange={(e) => setNewProducto({ ...newProducto, precio: Number(e.target.value) })}
+                      className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-[#060E18] border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white font-bold"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    Nombre del Material:
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Varilla Corrugada 3/8 pulg"
+                    value={newProducto.nombre}
+                    onChange={(e) => setNewProducto({ ...newProducto, nombre: e.target.value })}
+                    className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-[#060E18] border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    Stock Inicial:
+                  </label>
+                  <input
+                    type="number"
+                    value={newProducto.stock}
+                    onChange={(e) => setNewProducto({ ...newProducto, stock: Number(e.target.value) })}
+                    className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-[#060E18] border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    Descripción:
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Acero estructural con certificación de calidad"
+                    value={newProducto.descripcion}
+                    onChange={(e) => setNewProducto({ ...newProducto, descripcion: e.target.value })}
+                    className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-[#060E18] border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-2 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveModal(null)}
+                  className="flex-1 py-2 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-500">
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveProducto}
+                  className="flex-1 py-2 rounded-xl bg-amber-500 text-slate-950 font-black text-xs uppercase shadow-md">
+                  Guardar Material
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* MODAL: REGISTRAR CLIENTE */}
+        {activeModal === 'cliente' && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div className="bg-white dark:bg-[#0B1524] rounded-3xl border border-slate-200 dark:border-slate-800 p-6 max-w-md w-full shadow-2xl space-y-4">
+              <div className="flex justify-between items-center pb-2 border-b border-slate-100 dark:border-slate-800">
+                <h3 className="font-heading font-black text-sm uppercase text-slate-900 dark:text-white">
+                  Registrar Cliente Corporativo
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setActiveModal(null)}
+                  className="text-slate-400 hover:text-white">
+                  ✕
+                </button>
+              </div>
+
+              <div className="space-y-3 text-xs">
+                <div>
+                  <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    Identificación / NIT:
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="900.123.456-1"
+                    value={newCliente.identificacion}
+                    onChange={(e) => setNewCliente({ ...newCliente, identificacion: e.target.value })}
+                    className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-[#060E18] border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white font-mono"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                      Nombres / Razón:
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Constructora"
+                      value={newCliente.nombres}
+                      onChange={(e) => setNewCliente({ ...newCliente, nombres: e.target.value })}
+                      className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-[#060E18] border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                      Apellidos / Sigla:
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Bolívar S.A.S."
+                      value={newCliente.apellidos}
+                      onChange={(e) => setNewCliente({ ...newCliente, apellidos: e.target.value })}
+                      className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-[#060E18] border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white font-bold"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    Correo Electrónico:
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="compras@constructora.com"
+                    value={newCliente.email}
+                    onChange={(e) => setNewCliente({ ...newCliente, email: e.target.value })}
+                    className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-[#060E18] border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                      Teléfono:
+                    </label>
+                    <input
+                      type="tel"
+                      placeholder="310 987 6543"
+                      value={newCliente.telefono}
+                      onChange={(e) => setNewCliente({ ...newCliente, telefono: e.target.value })}
+                      className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-[#060E18] border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                      Dirección:
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Av. Calle 100 # 15-20"
+                      value={newCliente.direccion}
+                      onChange={(e) => setNewCliente({ ...newCliente, direccion: e.target.value })}
+                      className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-[#060E18] border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-2 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveModal(null)}
+                  className="flex-1 py-2 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-500">
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveCliente}
+                  className="flex-1 py-2 rounded-xl bg-amber-500 text-slate-950 font-black text-xs uppercase shadow-md">
+                  Guardar Cliente
                 </button>
               </div>
             </div>
